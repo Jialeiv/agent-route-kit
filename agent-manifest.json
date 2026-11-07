@@ -24,6 +24,14 @@
     "AI_DOMAINS"
   ],
   "optional_inputs": [
+    "HY2_PORTS",
+    "ENABLE_REALITY",
+    "REALITY_PORT",
+    "REALITY_UUID",
+    "REALITY_SNI",
+    "REALITY_PRIVATE_KEY",
+    "REALITY_PUBLIC_KEY",
+    "REALITY_SHORT_ID",
     "CORPORATE_DOMAINS",
     "DIRECT_DOMAINS",
     "GENERAL_EGRESS_PROBE_URL",

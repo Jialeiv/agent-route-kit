@@ -18,6 +18,12 @@ dns:
     "+.corp.example": system
     "+.internal.example": system
     "+.cdn.corp.example": system
+    # Decouple domestic and direct domains from remote fallback DNS.
+    # Prevents domestic/system requests from freezing when the overseas relay fluctuates.
+    "rule-set:cn": [223.5.5.5, 119.29.29.29]
+    "+.apple.com": [223.5.5.5, 119.29.29.29]
+    "+.icloud.com": [223.5.5.5, 119.29.29.29]
+    "+.example.cn": [223.5.5.5, 119.29.29.29]
 
 rule-providers:
   cn:

@@ -41,6 +41,19 @@ ssh "$RELAY_SSH_TARGET" "
   if command -v sing-box >/dev/null 2>&1; then
     sudo sing-box check -c '$RELAY_SING_BOX_CONFIG_PATH'
   fi
+  # Optional: configure firewall rules for port hopping & reality if ufw is available and active
+  if command -v ufw >/dev/null 2>&1 && sudo ufw status | grep -q "Status: active"; then
+    if [ -n "${REALITY_PORT:-}" ]; then
+      sudo ufw allow "${REALITY_PORT}/tcp" comment "VLESS-Reality" >/dev/null 2>&1 || true
+    fi
+    if [ -n "${HY2_PORTS:-}" ]; then
+      sudo ufw allow "${HY2_PORTS}/udp" comment "Hysteria2 Port Hopping" >/dev/null 2>&1 || true
+      if [ -f /etc/ufw/before.rules ] && ! grep -q "\*nat" /etc/ufw/before.rules; then
+        sudo sed -i '1i # NAT table for Hysteria2 port hopping\n*nat\n:PREROUTING ACCEPT [0:0]\n-A PREROUTING -p udp --dport '"${HY2_PORTS}"' -j REDIRECT --to-ports '"${AI_RELAY_PORT}"'\nCOMMIT\n' /etc/ufw/before.rules
+        sudo ufw reload >/dev/null 2>&1 || true
+      fi
+    fi
+  fi
   sudo systemctl restart '$RELAY_SING_BOX_SERVICE'
   sudo systemctl is-active '$RELAY_SING_BOX_SERVICE'
 "

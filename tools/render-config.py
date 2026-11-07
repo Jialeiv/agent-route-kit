@@ -66,6 +66,15 @@ def domain_rules(domains: list[str], target: str, indent: int = 2) -> str:
     return "".join(f"{prefix}- DOMAIN-SUFFIX,{domain},{target}\n" for domain in domains)
 
 
+def host_direct_rule(host: str, indent: int = 2) -> str:
+    prefix = " " * indent
+    if not host:
+        return ""
+    if re.fullmatch(r"\d+\.\d+\.\d+\.\d+", host):
+        return f"{prefix}- IP-CIDR,{host}/32,DIRECT,no-resolve\n"
+    return f"{prefix}- DOMAIN,{host},DIRECT\n"
+
+
 def render_template(src: Path, dst: Path, values: dict[str, str]) -> None:
     dst.parent.mkdir(parents=True, exist_ok=True)
     text = Template(src.read_text()).safe_substitute(values)
@@ -85,13 +94,148 @@ def main() -> None:
     corporate_domains = csv_list(values.get("CORPORATE_DOMAINS", ""))
     direct_domains = csv_list(values.get("DIRECT_DOMAINS", ""))
 
+    # Port hopping
+    hy2_ports = values.get("HY2_PORTS", "").strip()
+    hy2_ports_line = f"    ports: {hy2_ports}\n" if hy2_ports else ""
+
+    # Reality fallback
+    enable_reality = values.get("ENABLE_REALITY", "false").lower() in ("true", "1", "yes") or bool(values.get("REALITY_UUID"))
+    reality_port = values.get("REALITY_PORT", "8443").strip()
+    reality_uuid = values.get("REALITY_UUID", "").strip()
+    reality_sni = values.get("REALITY_SNI", "gateway.icloud.com").strip()
+    reality_priv_key = values.get("REALITY_PRIVATE_KEY", "").strip()
+    reality_pub_key = values.get("REALITY_PUBLIC_KEY", "").strip()
+    reality_short_id = values.get("REALITY_SHORT_ID", "a1b2c3d4e5f60718").strip()
+
+    if enable_reality and reality_uuid:
+        reality_inbound_json = f''',
+    {{
+      "type": "vless",
+      "tag": "vless-reality-in",
+      "listen": "::",
+      "listen_port": {reality_port},
+      "users": [
+        {{
+          "uuid": "{reality_uuid}",
+          "flow": "xtls-rprx-vision"
+        }}
+      ],
+      "tls": {{
+        "enabled": true,
+        "server_name": "{reality_sni}",
+        "reality": {{
+          "enabled": true,
+          "handshake": {{
+            "server": "{reality_sni}",
+            "server_port": 443
+          }},
+          "private_key": "{reality_priv_key}",
+          "short_id": [
+            "{reality_short_id}"
+          ]
+        }}
+      }}
+    }}'''
+        reality_proxies_yaml = f'''  - name: ai-relay-tcp
+    type: vless
+    server: {values["AI_RELAY_HOST"]}
+    port: {reality_port}
+    uuid: {reality_uuid}
+    network: tcp
+    tls: true
+    udp: true
+    flow: xtls-rprx-vision
+    servername: {reality_sni}
+    reality-opts:
+      public-key: {reality_pub_key}
+      short-id: {reality_short_id}
+    client-fingerprint: chrome
+'''
+        proxy_groups_yaml = '''  - name: ai-relay-group
+    type: fallback
+    proxies:
+      - ai-relay
+      - ai-relay-tcp
+    url: "http://www.gstatic.com/generate_204"
+    interval: 60
+
+  - name: MODE
+    type: select
+    proxies:
+      - Global
+      - AI Only
+      - Bypass
+
+  - name: Global
+    type: select
+    proxies: [ai-relay-group, ai-relay, ai-relay-tcp]
+
+  - name: AI Only
+    type: select
+    proxies: [DIRECT]
+
+  - name: Bypass
+    type: select
+    proxies: [DIRECT]
+
+  - name: ai-route
+    type: select
+    proxies: [ai-relay-group, ai-relay, ai-relay-tcp, DIRECT]
+'''
+        fallback_dns_target = "ai-relay-group"
+    else:
+        reality_inbound_json = ""
+        reality_proxies_yaml = ""
+        proxy_groups_yaml = '''  - name: MODE
+    type: select
+    proxies:
+      - Global
+      - AI Only
+      - Bypass
+
+  - name: Global
+    type: select
+    proxies: [ai-relay]
+
+  - name: AI Only
+    type: select
+    proxies: [DIRECT]
+
+  - name: Bypass
+    type: select
+    proxies: [DIRECT]
+
+  - name: ai-route
+    type: select
+    proxies: [ai-relay, DIRECT]
+'''
+        fallback_dns_target = "ai-relay"
+
+    # Relay and egress direct bypass rules (prevents TUN routing loops)
+    relay_direct_rules = host_direct_rule(values["AI_RELAY_HOST"]) + host_direct_rule(values["STABLE_EGRESS_HTTP_HOST"])
+
+    # DNS policy decoupling: direct domains resolve locally without touching fallback DNS
+    direct_dns_lines = []
+    if direct_domains:
+        direct_dns_lines.append('    "rule-set:cn": [223.5.5.5, 119.29.29.29]\n')
+        for d in direct_domains:
+            direct_dns_lines.append(f'    "+.{d}": [223.5.5.5, 119.29.29.29]\n')
+    direct_dns_policy = "".join(direct_dns_lines)
+
     values = {
         **values,
         "AI_DOMAIN_JSON_ARRAY": json.dumps(ai_domains, indent=8),
         "AI_RULES": domain_rules(ai_domains, "ai-route"),
         "CORPORATE_DNS_POLICY": indented_yaml_map(corporate_domains, "system"),
+        "DIRECT_DNS_POLICY": direct_dns_policy,
         "CORPORATE_RULES": domain_rules(corporate_domains, "DIRECT"),
         "DIRECT_DOMAIN_RULES": domain_rules(direct_domains, "DIRECT"),
+        "HY2_PORTS_LINE": hy2_ports_line,
+        "REALITY_INBOUND_JSON": reality_inbound_json,
+        "REALITY_PROXIES_YAML": reality_proxies_yaml,
+        "PROXY_GROUPS_YAML": proxy_groups_yaml,
+        "FALLBACK_DNS_TARGET": fallback_dns_target,
+        "RELAY_DIRECT_RULES": relay_direct_rules,
     }
 
     out = Path(args.out)
@@ -108,6 +252,8 @@ def main() -> None:
         "ai_domains": ai_domains,
         "corporate_domains_count": len(corporate_domains),
         "direct_domains_count": len(direct_domains),
+        "reality_enabled": bool(enable_reality and reality_uuid),
+        "port_hopping": hy2_ports if hy2_ports else "disabled",
     }
     (out / "deployment-metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
     print(f"Rendered configs to {out}")
