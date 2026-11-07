@@ -23,8 +23,11 @@ AgentRouteKit turns that mess into an agent-deployable network control plane. A 
 | Pain | What AgentRouteKit Does |
 |---|---|
 | Claude Code / Claude traffic needs a stable, low-risk egress | Pins AI provider domains to a stable egress route |
+| Peak-hour UDP QoS / blackout breaks Hysteria 2 tunnels | Uses Hysteria 2 port hopping plus automatic TCP VLESS-Reality fallback |
+| Remote proxy fluctuations freeze domestic/system services | Decouples DNS via `nameserver-policy` so domestic & direct queries bypass fallback DNS |
 | Codex-style agents leak proxy state into child processes | Keeps routing policy in the network layer instead of ad hoc shell exports |
 | Work traffic must not go through the AI route | Sends corporate/internal, domestic, and private traffic direct |
+| TUN-mode capture creates loops when connecting to relay host | Injects automatic relay host and egress IP direct bypass rules |
 | VPN/proxy changes are hard to debug | Provides `net`, `diagnose`, smoke tests, and a local dashboard |
 | Manual setup is easy to get wrong | Uses an explicit `agent-input.env` contract and rendered templates |
 | Public examples often leak secrets | Keeps credentials and generated configs outside the repository |
@@ -50,7 +53,7 @@ flowchart LR
   end
 
   subgraph Relay["Relay host"]
-    Tunnel["Encrypted inbound<br/>Hysteria2"]
+    Tunnel["Dual-protocol tunnel<br/>Hysteria2 (hopping) + VLESS-Reality"]
     Policy["sing-box routing"]
   end
 

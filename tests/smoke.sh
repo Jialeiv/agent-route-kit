@@ -16,6 +16,15 @@ python3 -m json.tool "$TMP_BUILD/claude-code/settings.json" >/dev/null
 python3 -m json.tool agent-manifest.json >/dev/null
 test -s "$TMP_BUILD/mihomo/config.yaml"
 
+# Backward-compatibility test: ensure rendering succeeds when Reality is disabled and no port hopping is configured
+TMP_LEGACY_ENV="${TMPDIR:-/tmp}/agent-route-kit-legacy-input.env"
+TMP_LEGACY_BUILD="${TMPDIR:-/tmp}/agent-route-kit-legacy-build"
+grep -v "^ENABLE_REALITY\|^REALITY_\|^HY2_PORTS" "$TMP_ENV" > "$TMP_LEGACY_ENV"
+python3 tools/render-config.py --env "$TMP_LEGACY_ENV" --out "$TMP_LEGACY_BUILD"
+python3 -m json.tool "$TMP_LEGACY_BUILD/sing-box/config.json" >/dev/null
+test -s "$TMP_LEGACY_BUILD/mihomo/config.yaml"
+rm -rf "$TMP_LEGACY_ENV" "$TMP_LEGACY_BUILD"
+
 bash -n tools/net
 bash -n tools/diagnose
 bash -n scripts/check-prereqs.sh

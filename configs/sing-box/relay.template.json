@@ -20,7 +20,7 @@
         "certificate_path": "/etc/sing-box/cert/cert.pem",
         "key_path": "/etc/sing-box/cert/key.pem"
       }
-    }
+    }${REALITY_INBOUND_JSON}
   ],
   "outbounds": [
     {

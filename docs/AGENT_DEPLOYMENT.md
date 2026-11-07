@@ -19,6 +19,12 @@ The human fills:
 - `CORPORATE_DOMAINS` when internal routing is needed
 - `DIRECT_DOMAINS` when extra local/direct routing is needed
 
+Optional inputs:
+- `HY2_PORTS`: Port hopping range (e.g. `20000-40000`) to avoid ISP UDP QoS throttling.
+- `ENABLE_REALITY`: Set to `true` to enable TCP VLESS-Reality as secondary fallback.
+- `REALITY_PORT`, `REALITY_UUID`, `REALITY_SNI`, `REALITY_PRIVATE_KEY`, `REALITY_PUBLIC_KEY`, `REALITY_SHORT_ID`: Keys generated on the relay via:
+  `sing-box generate reality-keypair && sing-box generate uuid && openssl rand -hex 8`
+
 The human should not edit templates directly.
 
 ## Agent Procedure

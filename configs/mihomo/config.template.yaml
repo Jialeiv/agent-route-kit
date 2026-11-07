@@ -19,50 +19,30 @@ dns:
     - 223.5.5.5
     - 119.29.29.29
   fallback:
-    - https://1.1.1.1/dns-query#ai-relay
-    - https://8.8.8.8/dns-query#ai-relay
+    - https://1.1.1.1/dns-query#${FALLBACK_DNS_TARGET}
+    - https://8.8.8.8/dns-query#${FALLBACK_DNS_TARGET}
   fallback-filter:
     geoip: true
     geoip-code: CN
   nameserver-policy:
 ${CORPORATE_DNS_POLICY}
+${DIRECT_DNS_POLICY}
 
 proxies:
   - name: ai-relay
     type: hysteria2
     server: ${AI_RELAY_HOST}
     port: ${AI_RELAY_PORT}
-    password: ${HY2_PASSWORD}
+${HY2_PORTS_LINE}    password: ${HY2_PASSWORD}
     sni: ${HY2_SNI}
     skip-cert-verify: ${HY2_SKIP_CERT_VERIFY}
     up: "${HY2_UP}"
     down: "${HY2_DOWN}"
-
+${REALITY_PROXIES_YAML}
 proxy-groups:
-  - name: MODE
-    type: select
-    proxies:
-      - Global
-      - AI Only
-      - Bypass
-
-  - name: Global
-    type: select
-    proxies: [ai-relay]
-
-  - name: AI Only
-    type: select
-    proxies: [DIRECT]
-
-  - name: Bypass
-    type: select
-    proxies: [DIRECT]
-
-  - name: ai-route
-    type: select
-    proxies: [ai-relay, DIRECT]
-
+${PROXY_GROUPS_YAML}
 rules:
+${RELAY_DIRECT_RULES}
 ${AI_RULES}
 
   - IP-CIDR,127.0.0.0/8,DIRECT,no-resolve

@@ -23,8 +23,11 @@ AgentRouteKit 把这些零散经验收敛成一个可部署的网络控制平面
 | 痛点 | AgentRouteKit 的处理方式 |
 |---|---|
 | Claude Code / Claude 流量需要稳定、低风险出口 | 将 AI provider 域名固定到稳定出口 |
+| 晚高峰跨国 UDP 遭遇运营商 QoS 限速或断流 | 支持 Hysteria 2 端口跳跃防 QoS + 自动降级至 TCP VLESS-Reality 兜底 |
+| 海外代理抖动或断网导致国内/系统服务假死 | 实施 DNS 优雅解耦，国内与直连域名强制走阿里/腾讯 DNS，不经海外 Fallback |
 | Codex 风格 agent 会把代理状态泄漏给子进程 | 把路由策略放在网络层，而不是依赖零散的 shell export |
 | 工作流量不能被 AI 线路污染 | 公司/内网、国内域名、私网网段显式直连 |
+| TUN 全局接管导致连接 VPS 管理端口时发生死锁 | 自动在规则顶端注入中继节点与出口 IP 的 DIRECT 白名单，防递归回环 |
 | VPN/代理切换后很难定位问题 | 内置 `net`、`diagnose`、smoke test 和本地 Dashboard |
 | 手工部署容易漏步骤 | 用 `agent-input.env` 作为输入契约，自动渲染模板 |
 | 公开示例容易泄漏秘密 | 凭据和生成配置默认不进仓库 |
@@ -52,7 +55,7 @@ flowchart LR
   end
 
   subgraph Relay["中继节点"]
-    Tunnel["加密入站<br/>Hysteria2"]
+    Tunnel["双协议加密隧道<br/>Hysteria2 (端口跳跃) + VLESS-Reality"]
     Policy["sing-box 路由"]
   end
 
